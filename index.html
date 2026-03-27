@@ -589,6 +589,7 @@
         <button class="sys-btn sys-btn-manage" onclick="openManageModal()">管理</button>
         <button class="sys-btn sys-btn-genre" onclick="openGenreManageModal()">ジャンル</button>
       </div>
+      <div id="sync-status" style="text-align:right;padding-right:2px;min-height:16px;"></div>
     </div>
     <div id="genre-scroll"></div>
   </div>
@@ -711,6 +712,58 @@
 
   <script>
     // ══════════════════════════════════════════════════════
+    // CLOUD SYNC — Vercel API Routes経由（APIキーはサーバー側）
+    // ブラウザはAPIキーを一切持たない。/api/* だけ呼ぶ。
+    // ══════════════════════════════════════════════════════
+    let saveTimer = null;
+
+    async function loadFromCloud() {
+      try {
+        showSyncStatus('syncing');
+        const res = await fetch('/api/load');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        showSyncStatus('ok');
+        return data;
+      } catch(e) {
+        showSyncStatus('error');
+        return null;
+      }
+    }
+
+    function saveData() {
+      // localStorageにも保存（オフライン時フォールバック）
+      localStorage.setItem('bubbleStudyApp_v2',    JSON.stringify(studyData));
+      localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
+      // デバウンス500ms でサーバーへ送信
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        try {
+          showSyncStatus('syncing');
+          const res = await fetch('/api/save', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studyData, appGenres })
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          showSyncStatus('ok');
+        } catch(e) { showSyncStatus('error'); }
+      }, 500);
+    }
+
+    function showSyncStatus(state) {
+      const el = document.getElementById('sync-status');
+      if (!el) return;
+      const map = {
+        syncing: ['🔄', '同期中…', '#f39c12'],
+        ok:      ['☁️',  '同期済',  '#2ecc71'],
+        error:   ['⚠️',  '同期失敗', '#e74c3c']
+      };
+      const [icon, label, color] = map[state];
+      el.innerHTML = `<span style="color:${color};font-size:11px;font-weight:700;">${icon} ${label}</span>`;
+    }
+
+    // ══════════════════════════════════════════════════════
     // DATA
     // ══════════════════════════════════════════════════════
     const defaultGenres = [
@@ -720,7 +773,6 @@
       { id: 4, name: "投資", isHidden: false },
       { id: 5, name: "名言", isHidden: false }
     ];
-    let appGenres = JSON.parse(localStorage.getItem('bubbleStudyGenres_v2')) || defaultGenres;
 
     const defaultData = [
       { id: 1, genre: "微生物学", q: "キチンを分解する主な酵素は？", a: "キチナーゼ\n（複合微生物系での分解プロセスが鍵）", mastery: 2, lastRev: "2026-03-20", isHidden: false },
@@ -730,12 +782,9 @@
       { id: 5, genre: "投資", q: "デイトレードの基本原則は？", a: "利益より学習を優先。\nまずは少額（例: 3万円）から経験を積むこと。", mastery: 5, lastRev: "2026-03-23", isHidden: false },
       { id: 6, genre: "理系", q: "シュレディンガー方程式の目的は？", a: "量子力学において、粒子の状態（波動関数）の時間変化を記述すること。", mastery: 2, lastRev: "2026-03-18", isHidden: false }
     ];
-    let studyData = JSON.parse(localStorage.getItem('bubbleStudyApp_v2')) || defaultData;
 
-    function saveData() {
-      localStorage.setItem('bubbleStudyApp_v2', JSON.stringify(studyData));
-      localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
-    }
+    let appGenres = JSON.parse(localStorage.getItem('bubbleStudyGenres_v2')) || defaultGenres;
+    let studyData = JSON.parse(localStorage.getItem('bubbleStudyApp_v2'))    || defaultData;
 
     // ══════════════════════════════════════════════════════
     // STATE
@@ -780,7 +829,7 @@
         return days - (d.mastery * 3) > 0;
       }).length;
       let mastered = matching.filter(d => d.mastery >= 8).length;
-      let avgMastery = total > 0 ? matching.reduce((s, d) => s + Math.max(0, d.mastery), 0) / total / 10 : 0;
+      let avgMastery = total > 0 ? matching.reduce((s, d) => s + Math.max(-10, d.mastery), 0) / total / 10 : 0;
 
       document.getElementById('stat-total').textContent = total;
       document.getElementById('stat-urgent').textContent = urgent;
@@ -825,7 +874,7 @@
     function closeStudyModal(result) {
       let todayStr = today.toISOString().split('T')[0];
       if (result === 'good') { activeBubble.data.mastery += 1; activeBubble.data.lastRev = todayStr; }
-      else if (result === 'bad') { activeBubble.data.mastery = Math.max(0, activeBubble.data.mastery - 2); activeBubble.data.lastRev = todayStr; }
+      else if (result === 'bad') { activeBubble.data.mastery -= 2; activeBubble.data.lastRev = todayStr; }
       saveData();
       activeBubble.calculateState();
       document.getElementById("study-overlay").classList.remove("show");
@@ -1070,7 +1119,7 @@
 
         this.urgency = urgency;
         this.r = 70 + urgency * 10;
-        this.r = Math.max(50, Math.min(200, this.r));
+        this.r = Math.max(45, Math.min(230, this.r));
 
         let hue = getGenreHue(this.data.genre);
 
@@ -1086,11 +1135,28 @@
           this.glowA = 120 + t * 80;
         }
 
-        // Text sizing
-        this.boxW = this.r * 1.5;
-        let charCount = this.data.q.length;
-        let optSize = Math.sqrt((this.boxW * this.boxW) / Math.max(charCount, 1)) * 0.75;
-        this.fSize = Math.max(9, Math.min(this.r * 0.38, optSize));
+        // Text sizing — ensure the full question fits inside the bubble
+        // Available area: circle minus space for genre label (top) and mastery dots (bottom)
+        // Inscribed square of the circle = r * sqrt(2), then shrink to 85% for padding
+        this.boxW = this.r * 1.35;   // horizontal text area width
+        this.boxH = this.r * 1.1;    // vertical text area height (excludes label/dots zones)
+
+        let q = this.data.q;
+
+        // Binary-search the largest font size where all text fits in boxW × boxH
+        // Estimate: lines = ceil(chars / charsPerLine), totalH = lines * leading
+        // charsPerLine ≈ boxW / (fSize * 0.95)  (Japanese glyphs ≈ 1em wide)
+        let lo = 7, hi = 28, best = 7;
+        for (let iter = 0; iter < 12; iter++) {
+          let mid = (lo + hi) / 2;
+          let leading = mid * 1.3;
+          let charsPerLine = Math.max(1, Math.floor(this.boxW / (mid * 0.98)));
+          let lines = Math.ceil(q.length / charsPerLine);
+          let totalH = lines * leading;
+          if (totalH <= this.boxH) { best = mid; lo = mid; }
+          else { hi = mid; }
+        }
+        this.fSize = Math.max(7, best);
       }
 
       update(mx, my) {
@@ -1166,14 +1232,25 @@
         textSize(Math.max(8, this.r * 0.13));
         text(this.data.genre, 0, -this.r * 0.68);
 
-        // Main question text
+        // Main question text — drawn in a centered box, clipped to boxW × boxH
         fill(20, 20, 30);
         textStyle(BOLD);
-        textAlign(CENTER, CENTER);
+        textAlign(CENTER, TOP);
         textWrap(CHAR);
         textSize(this.fSize);
-        textLeading(this.fSize * 1.25);
-        text(this.data.q, -this.boxW / 2, -this.boxW * 0.35, this.boxW, this.boxW);
+        let leading = this.fSize * 1.3;
+        textLeading(leading);
+        // Center the text block vertically inside the usable zone
+        // Usable zone: from just below genre label to just above mastery dots
+        // Genre label sits at -r*0.68, mastery dots at r*0.72
+        let zoneTop = -this.r * 0.55;
+        let zoneH   = this.r * 1.18;   // total usable height
+        // Estimate number of lines to nudge block upward into true center
+        let charsPerLine = Math.max(1, Math.floor(this.boxW / (this.fSize * 0.98)));
+        let estLines = Math.ceil(this.data.q.length / charsPerLine);
+        let estTextH = estLines * leading;
+        let textTop = zoneTop + Math.max(0, (zoneH - estTextH) / 2);
+        text(this.data.q, -this.boxW / 2, textTop, this.boxW, this.boxH + 10);
 
         // Mastery dots at bottom
         let maxDots = 5;
@@ -1205,6 +1282,18 @@
       initUI();
       createBubbles();
       setTimeout(showHint, 1200);
+      // クラウドからデータを読み込んで画面を更新
+      if (JSONBIN_API_KEY && JSONBIN_BIN_ID) {
+        loadFromCloud().then(cloud => {
+          if (!cloud) return;
+          studyData = cloud.studyData || studyData;
+          appGenres = cloud.appGenres || appGenres;
+          localStorage.setItem('bubbleStudyApp_v2',    JSON.stringify(studyData));
+          localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
+          initUI();
+          createBubbles();
+        });
+      }
     }
 
     function draw() {
