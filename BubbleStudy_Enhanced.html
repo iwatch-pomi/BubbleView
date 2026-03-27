@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Bubble Study — 知識の生命体</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&family=DM+Serif+Display:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <style>
+    :root {
+      --ink: #0d0d14;
+      --paper: #f5f2eb;
+      --muted: #8a8a9a;
+      --accent: #e8572a;
+      --accent2: #3b6fd4;
+      --surface: rgba(245,242,235,0.92);
+      --glass: rgba(13,13,20,0.06);
+      --radius: 18px;
+      --shadow: 0 8px 40px rgba(13,13,20,0.12), 0 2px 8px rgba(13,13,20,0.08);
+      --shadow-deep: 0 24px 80px rgba(13,13,20,0.18), 0 4px 16px rgba(13,13,20,0.1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      overflow: hidden;
+      background: var(--paper);
+      font-family: 'Noto Sans JP', sans-serif;
+      color: var(--ink);
+      cursor: default;
+      height: 100dvh;
+    }
+
+    /* ── 粒子テクスチャ背景 ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: 
+        radial-gradient(circle at 20% 20%, rgba(232,87,42,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(59,111,212,0.06) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    canvas { position: fixed; top: 0; left: 0; z-index: 1; }
+
+    /* ══════════════════════════════════
+       NAV
+    ══════════════════════════════════ */
+    #nav-container {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 14px 20px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: linear-gradient(to bottom, rgba(245,242,235,0.97) 70%, transparent);
+      backdrop-filter: blur(12px);
+    }
+
+    #nav-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .app-logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--ink);
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .app-logo .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.7; }
+    }
+
+    #system-buttons {
+      display: flex;
+      gap: 6px;
+    }
+
+    .sys-btn {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .sys-btn:hover { transform: translateY(-2px); }
+    .sys-btn:active { transform: scale(0.95); }
+    .sys-btn-add { background: var(--accent); color: #fff; }
+    .sys-btn-add:hover { background: #d44b22; }
+    .sys-btn-manage { background: var(--ink); color: #fff; }
+    .sys-btn-manage:hover { background: #1a1a2e; }
+    .sys-btn-genre { background: var(--accent2); color: #fff; }
+    .sys-btn-genre:hover { background: #2d5ab8; }
+
+    #genre-scroll {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    #genre-scroll::-webkit-scrollbar { display: none; }
+
+    .genre-pill {
+      padding: 5px 14px;
+      border-radius: 100px;
+      border: 1.5px solid rgba(13,13,20,0.15);
+      background: transparent;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      flex-shrink: 0;
+    }
+    .genre-pill:hover { border-color: var(--ink); color: var(--ink); transform: translateY(-1px); }
+    .genre-pill.active {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+    }
+
+    /* ══════════════════════════════════
+       STATS BAR
+    ══════════════════════════════════ */
+    #stats-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 10px 20px 14px;
+      background: linear-gradient(to top, rgba(245,242,235,0.97) 70%, transparent);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+    .stat-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1;
+    }
+    .stat-num.urgent { color: var(--accent); }
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 30px;
+      background: rgba(13,13,20,0.1);
+    }
+
+    /* ══════════════════════════════════
+       MODAL BASE
+    ══════════════════════════════════ */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(13,13,20,0.4);
+      z-index: 200;
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+
+    .modal-card {
+      background: var(--paper);
+      border-radius: 24px;
+      box-shadow: var(--shadow-deep);
+      width: 100%;
+      max-width: 480px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 32px 28px;
+      animation: modal-in 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes modal-in {
+      from { opacity: 0; transform: scale(0.88) translateY(20px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: var(--ink);
+      margin-bottom: 20px;
+      line-height: 1.1;
+    }
+    .modal-title small {
+      display: block;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    /* ── Study Modal Special ── */
+    #study-overlay .modal-card {
+      text-align: center;
+    }
+
+    .study-genre-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      background: var(--glass);
+      border-radius: 100px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    #modal-q {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--ink);
+      line-height: 1.4;
+      margin-bottom: 20px;
+    }
+
+    .answer-box {
+      background: var(--glass);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .answer-box .ans-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #modal-a {
+      font-size: 17px;
+      color: var(--ink);
+      white-space: pre-wrap;
+      line-height: 1.7;
+    }
+
+    .mastery-bar-wrap {
+      margin-bottom: 20px;
+    }
+    .mastery-bar-wrap .mb-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .mastery-track {
+      height: 5px;
+      background: rgba(13,13,20,0.08);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .mastery-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width 0.5s ease;
+    }
+
+    .study-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .study-btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .study-btn:hover { transform: translateY(-3px); }
+    .study-btn:active { transform: scale(0.95); }
+    .study-btn small { font-size: 10px; opacity: 0.7; font-weight: 400; }
+    .btn-good { background: #e6f5ea; color: #2d8a4e; }
+    .btn-good:hover { background: #2d8a4e; color: #fff; }
+    .btn-bad  { background: #fcecea; color: var(--accent); }
+    .btn-bad:hover  { background: var(--accent); color: #fff; }
+    .btn-neutral { background: var(--glass); color: var(--muted); }
+    .btn-neutral:hover { background: rgba(13,13,20,0.12); }
+
+    /* ── Form elements ── */
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .form-input, .form-textarea, .form-select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid rgba(13,13,20,0.12);
+      border-radius: 12px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 15px;
+      color: var(--ink);
+      background: #fff;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--accent2);
+    }
+    .form-textarea { height: 100px; resize: vertical; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: var(--ink);
+      color: #fff;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 6px;
+    }
+    .btn-primary:hover { background: var(--accent); transform: translateY(-1px); }
+    .btn-cancel {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .btn-cancel:hover { color: var(--ink); }
+
+    /* ── Manage Lists ── */
+    .manage-genre-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0 6px;
+      border-bottom: 2px solid var(--ink);
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    .manage-genre-header:first-of-type { margin-top: 0; }
+    .manage-genre-header span {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--ink);
+    }
+    .manage-genre-header .item-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .manage-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(13,13,20,0.06);
+    }
+    .manage-item.hidden-item { opacity: 0.4; }
+    .manage-text { flex-grow: 1; }
+    .manage-text .item-status {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .manage-text .item-q {
+      font-size: 13px;
+      color: var(--ink);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .manage-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .action-btn-sm {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Noto Sans JP', sans-serif;
+    }
+    .action-btn-sm:hover { transform: scale(1.05); }
+    .btn-sm-hide { background: rgba(243,156,18,0.15); color: #c17d00; }
+    .btn-sm-show { background: rgba(138,138,154,0.15); color: var(--muted); }
+    .btn-sm-delete { background: rgba(232,87,42,0.12); color: var(--accent); }
+    .btn-sm-delete:hover { background: var(--accent); color: #fff; }
+
+    /* ── Search ── */
+    .search-wrap {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 10px 16px 10px 38px;
+      border: 1.5px solid rgba(13,13,20,0.12);
+      border-radius: 100px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-wrap input:focus { border-color: var(--accent2); }
+    .search-wrap::before {
+      content: '🔍';
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    /* ── Genre manage specific ── */
+    .genre-add-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .genre-add-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1.5px solid rgba(13,13,20,0.12);
+      border-radius: 10px;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      outline: none;
+    }
+    .genre-add-row input:focus { border-color: var(--accent2); }
+    .genre-add-row button {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 10px;
+      background: var(--ink);
+      color: #fff;
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .genre-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(13,13,20,0.06);
+    }
+    .genre-item.hidden-item { opacity: 0.4; }
+    .genre-item .genre-name {
+      flex-grow: 1;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .genre-item .genre-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Tooltip hint ── */
+    #hint {
+      position: fixed;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(13,13,20,0.75);
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 12px;
+      z-index: 99;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+    #hint.show { opacity: 1; }
+
+    /* ── Empty state ── */
+    #empty-state {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 2;
+    }
+    #empty-state .empty-emoji { font-size: 60px; margin-bottom: 12px; }
+    #empty-state h3 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    #empty-state p { font-size: 14px; color: var(--muted); }
+
+    /* ── Scrollbar ── */
+    .modal-card::-webkit-scrollbar { width: 4px; }
+    .modal-card::-webkit-scrollbar-track { background: transparent; }
+    .modal-card::-webkit-scrollbar-thumb { background: rgba(13,13,20,0.15); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- ══ NAV ══ -->
+  <div id="nav-container">
+    <div id="nav-top">
+      <div class="app-logo">
+        <span class="dot"></span>Bubble Study
+      </div>
+      <div id="system-buttons">
+        <button class="sys-btn sys-btn-add" onclick="openAddModal()">＋ 追加</button>
+        <button class="sys-btn sys-btn-manage" onclick="openManageModal()">管理</button>
+        <button class="sys-btn sys-btn-genre" onclick="openGenreManageModal()">ジャンル</button>
+      </div>
+    </div>
+    <div id="genre-scroll"></div>
+  </div>
+
+  <!-- ══ STATS BAR ══ -->
+  <div id="stats-bar">
+    <div class="stat-item">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">全問題</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item">
+      <div class="stat-num urgent" id="stat-urgent">0</div>
+      <div class="stat-label">要復習</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item">
+      <div class="stat-num" id="stat-mastered">0</div>
+      <div class="stat-label">習熟済</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item" style="flex:1; align-items:flex-end;">
+      <div style="width:100%; max-width:120px;">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;text-align:right;">習熟度</div>
+        <div class="mastery-track"><div class="mastery-fill" id="overall-mastery" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HINT ══ -->
+  <div id="hint">泡をタップして学習しよう！</div>
+
+  <!-- ══ EMPTY STATE ══ -->
+  <div id="empty-state">
+    <div class="empty-emoji">🫧</div>
+    <h3>泡がありません</h3>
+    <p>「＋ 追加」から問題を追加してみよう</p>
+  </div>
+
+  <!-- ══ STUDY MODAL ══ -->
+  <div id="study-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="study-genre-badge" id="modal-genre">ジャンル</div>
+      <h2 id="modal-q" class="modal-title" style="text-align:center; margin-bottom:20px;">問題文</h2>
+      <div class="answer-box">
+        <div class="ans-label">解答・詳細</div>
+        <div id="modal-a">解答文</div>
+      </div>
+      <div class="mastery-bar-wrap">
+        <div class="mb-label">
+          <span>習熟度</span>
+          <span id="modal-mastery-label">Lv.0</span>
+        </div>
+        <div class="mastery-track">
+          <div class="mastery-fill" id="modal-mastery-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="study-actions">
+        <button class="study-btn btn-bad" onclick="closeStudyModal('bad')">
+          😓 難しい…
+          <small>習熟度－2</small>
+        </button>
+        <button class="study-btn btn-neutral" onclick="closeStudyModal('close')">
+          ↩ 閉じる
+          <small>変化なし</small>
+        </button>
+        <button class="study-btn btn-good" onclick="closeStudyModal('good')">
+          ✓ わかった！
+          <small>習熟度＋1</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADD MODAL ══ -->
+  <div id="add-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-title"><small>New Card</small>新しい泡を追加</div>
+      <div class="form-group">
+        <label class="form-label">ジャンル</label>
+        <select id="add-genre" class="form-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">問題（表面の文字）</label>
+        <input type="text" id="add-q" class="form-input" placeholder="例：キチンを分解する酵素は？">
+      </div>
+      <div class="form-group">
+        <label class="form-label">解答・詳細</label>
+        <textarea id="add-a" class="form-textarea" placeholder="例：キチナーゼ（複合微生物系での分解プロセスが鍵）"></textarea>
+      </div>
+      <button class="btn-primary" onclick="submitNewData()">追加する</button>
+      <button class="btn-cancel" onclick="closeAddModal()">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- ══ MANAGE MODAL ══ -->
+  <div id="manage-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-title"><small>Library</small>問題の管理</div>
+      <div class="search-wrap">
+        <input type="text" id="manage-search" placeholder="問題を検索..." oninput="renderManageList()">
+      </div>
+      <div id="manage-list"></div>
+      <button class="btn-cancel" onclick="closeManageModal()">閉じる</button>
+    </div>
+  </div>
+
+  <!-- ══ GENRE MANAGE MODAL ══ -->
+  <div id="genre-manage-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-title"><small>Genres</small>ジャンルの管理</div>
+      <div class="genre-add-row">
+        <input type="text" id="new-genre-input" placeholder="新しいジャンル名...">
+        <button onclick="addNewGenre()">追加</button>
+      </div>
+      <div id="genre-list"></div>
+      <button class="btn-cancel" onclick="closeGenreManageModal()">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════
+    // DATA
+    // ══════════════════════════════════════════════════════
+    const defaultGenres = [
+      { id: 1, name: "微生物学", isHidden: false },
+      { id: 2, name: "理系", isHidden: false },
+      { id: 3, name: "ドイツ語", isHidden: false },
+      { id: 4, name: "投資", isHidden: false },
+      { id: 5, name: "名言", isHidden: false }
+    ];
+    let appGenres = JSON.parse(localStorage.getItem('bubbleStudyGenres_v2')) || defaultGenres;
+
+    const defaultData = [
+      { id: 1, genre: "微生物学", q: "キチンを分解する主な酵素は？", a: "キチナーゼ\n（複合微生物系での分解プロセスが鍵）", mastery: 2, lastRev: "2026-03-20", isHidden: false },
+      { id: 2, genre: "理系", q: "顕微鏡などの「bunkainou」の正しい漢字は？", a: "分解能", mastery: 1, lastRev: "2026-03-10", isHidden: false },
+      { id: 3, genre: "ドイツ語", q: "分離動詞 'aufstehen' の意味と過去分詞は？", a: "意味: 起きる\n過去分詞: aufgestanden", mastery: 4, lastRev: "2026-03-22", isHidden: false },
+      { id: 4, genre: "名言", q: "Stay hungry, stay foolish. - スティーブ・ジョブズ", a: "ハングリーであれ、愚かであれ。\n- スティーブ・ジョブズ", mastery: 3, lastRev: "2026-03-15", isHidden: false },
+      { id: 5, genre: "投資", q: "デイトレードの基本原則は？", a: "利益より学習を優先。\nまずは少額（例: 3万円）から経験を積むこと。", mastery: 5, lastRev: "2026-03-23", isHidden: false },
+      { id: 6, genre: "理系", q: "シュレディンガー方程式の目的は？", a: "量子力学において、粒子の状態（波動関数）の時間変化を記述すること。", mastery: 2, lastRev: "2026-03-18", isHidden: false }
+    ];
+    let studyData = JSON.parse(localStorage.getItem('bubbleStudyApp_v2')) || defaultData;
+
+    function saveData() {
+      localStorage.setItem('bubbleStudyApp_v2', JSON.stringify(studyData));
+      localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
+    }
+
+    // ══════════════════════════════════════════════════════
+    // STATE
+    // ══════════════════════════════════════════════════════
+    let bubbles = [];
+    let currentGenre = "All";
+    let activeBubble = null;
+    let isAnyModalOpen = () => isStudyOpen || isAddOpen || isManageOpen || isGenreManageOpen;
+    let isStudyOpen = false, isAddOpen = false, isManageOpen = false, isGenreManageOpen = false;
+    const today = new Date();
+
+    // ══════════════════════════════════════════════════════
+    // UI INIT
+    // ══════════════════════════════════════════════════════
+    function initUI() {
+      renderNavButtons();
+      renderGenreDropdown();
+      updateStats();
+    }
+
+    function renderNavButtons() {
+      let c = document.getElementById("genre-scroll");
+      c.innerHTML = `<button class="genre-pill ${currentGenre==='All'?'active':''}" onclick="setGenre('All')">All</button>`;
+      appGenres.filter(g => !g.isHidden).forEach(g => {
+        c.innerHTML += `<button class="genre-pill ${currentGenre===g.name?'active':''}" onclick="setGenre('${g.name}')">${g.name}</button>`;
+      });
+    }
+
+    function renderGenreDropdown() {
+      let sel = document.getElementById("add-genre");
+      sel.innerHTML = appGenres.filter(g => !g.isHidden).map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+    }
+
+    function updateStats() {
+      let activeGenres = appGenres.filter(g => !g.isHidden).map(g => g.name);
+      let visible = studyData.filter(d => !d.isHidden && activeGenres.includes(d.genre));
+      let matching = currentGenre === "All" ? visible : visible.filter(d => d.genre === currentGenre);
+
+      let total = matching.length;
+      let urgent = matching.filter(d => {
+        let days = (today - new Date(d.lastRev)) / 86400000;
+        return days - (d.mastery * 3) > 0;
+      }).length;
+      let mastered = matching.filter(d => d.mastery >= 8).length;
+      let avgMastery = total > 0 ? matching.reduce((s, d) => s + Math.max(0, d.mastery), 0) / total / 10 : 0;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-urgent').textContent = urgent;
+      document.getElementById('stat-mastered').textContent = mastered;
+      document.getElementById('overall-mastery').style.width = Math.min(100, avgMastery * 100) + '%';
+
+      document.getElementById('empty-state').style.display = total === 0 ? 'block' : 'none';
+    }
+
+    function showHint() {
+      let hint = document.getElementById('hint');
+      hint.classList.add('show');
+      setTimeout(() => hint.classList.remove('show'), 3000);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // GENRE / NAVIGATION
+    // ══════════════════════════════════════════════════════
+    function setGenre(genre) {
+      currentGenre = genre;
+      renderNavButtons();
+      createBubbles();
+      updateStats();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // STUDY MODAL
+    // ══════════════════════════════════════════════════════
+    function openStudyModal(bubble) {
+      activeBubble = bubble;
+      isStudyOpen = true;
+      let d = bubble.data;
+      document.getElementById("modal-genre").textContent = d.genre;
+      document.getElementById("modal-q").textContent = d.q;
+      document.getElementById("modal-a").textContent = d.a;
+      let pct = Math.min(100, Math.max(0, d.mastery) / 10 * 100);
+      document.getElementById("modal-mastery-bar").style.width = pct + '%';
+      document.getElementById("modal-mastery-label").textContent = `Lv.${d.mastery}`;
+      document.getElementById("study-overlay").classList.add("show");
+    }
+
+    function closeStudyModal(result) {
+      let todayStr = today.toISOString().split('T')[0];
+      if (result === 'good') { activeBubble.data.mastery += 1; activeBubble.data.lastRev = todayStr; }
+      else if (result === 'bad') { activeBubble.data.mastery = Math.max(0, activeBubble.data.mastery - 2); activeBubble.data.lastRev = todayStr; }
+      saveData();
+      activeBubble.calculateState();
+      document.getElementById("study-overlay").classList.remove("show");
+      isStudyOpen = false;
+      activeBubble = null;
+      updateStats();
+    }
+
+    // Overlay click to close
+    document.getElementById("study-overlay").addEventListener("click", function(e) {
+      if (e.target === this) closeStudyModal('close');
+    });
+    document.getElementById("add-overlay").addEventListener("click", function(e) {
+      if (e.target === this) closeAddModal();
+    });
+    document.getElementById("manage-overlay").addEventListener("click", function(e) {
+      if (e.target === this) closeManageModal();
+    });
+    document.getElementById("genre-manage-overlay").addEventListener("click", function(e) {
+      if (e.target === this) closeGenreManageModal();
+    });
+
+    // ══════════════════════════════════════════════════════
+    // ADD MODAL
+    // ══════════════════════════════════════════════════════
+    function openAddModal() {
+      if (appGenres.filter(g => !g.isHidden).length === 0) {
+        alert("有効なジャンルがありません。まずはジャンルを追加してください。");
+        return;
+      }
+      isAddOpen = true;
+      document.getElementById("add-q").value = "";
+      document.getElementById("add-a").value = "";
+      document.getElementById("add-overlay").classList.add("show");
+      setTimeout(() => document.getElementById("add-q").focus(), 300);
+    }
+
+    function closeAddModal() {
+      document.getElementById("add-overlay").classList.remove("show");
+      isAddOpen = false;
+    }
+
+    function submitNewData() {
+      let genre = document.getElementById("add-genre").value;
+      let q = document.getElementById("add-q").value.trim();
+      let a = document.getElementById("add-a").value.trim();
+      if (!q || !a) return alert("問題と解答を入力してください！");
+      let newId = studyData.length > 0 ? Math.max(...studyData.map(d => d.id)) + 1 : 1;
+      let todayStr = today.toISOString().split('T')[0];
+      studyData.push({ id: newId, genre, q, a, mastery: 1, lastRev: todayStr, isHidden: false });
+      saveData();
+      createBubbles();
+      updateStats();
+      closeAddModal();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // MANAGE MODAL
+    // ══════════════════════════════════════════════════════
+    function openManageModal() {
+      isManageOpen = true;
+      renderManageList();
+      document.getElementById("manage-overlay").classList.add("show");
+    }
+
+    function closeManageModal() {
+      document.getElementById("manage-overlay").classList.remove("show");
+      isManageOpen = false;
+      createBubbles();
+      updateStats();
+    }
+
+    function renderManageList() {
+      let listDiv = document.getElementById("manage-list");
+      let searchVal = (document.getElementById("manage-search").value || "").toLowerCase();
+      listDiv.innerHTML = "";
+      if (studyData.length === 0) { listDiv.innerHTML = "<p style='color:var(--muted);text-align:center;padding:20px 0'>データがありません</p>"; return; }
+      
+      let grouped = {};
+      studyData
+        .filter(d => !searchVal || d.q.toLowerCase().includes(searchVal) || d.a.toLowerCase().includes(searchVal))
+        .forEach(d => {
+          if (!grouped[d.genre]) grouped[d.genre] = [];
+          grouped[d.genre].push(d);
+        });
+
+      for (let genre in grouped) {
+        let header = document.createElement("div");
+        header.className = "manage-genre-header";
+        header.innerHTML = `<span>📁 ${genre}</span><span class="item-count">${grouped[genre].length}件</span>`;
+        listDiv.appendChild(header);
+        grouped[genre].forEach(d => {
+          let item = document.createElement("div");
+          item.className = "manage-item" + (d.isHidden ? " hidden-item" : "");
+          let statusText = d.isHidden ? "非表示中" : `Lv.${d.mastery}`;
+          let toggleClass = d.isHidden ? "btn-sm-show" : "btn-sm-hide";
+          let toggleLabel = d.isHidden ? "表示" : "隠す";
+          item.innerHTML = `
+            <div class="manage-text">
+              <div class="item-status">${statusText}</div>
+              <div class="item-q">${d.q}</div>
+            </div>
+            <div class="manage-actions">
+              <button class="action-btn-sm ${toggleClass}" onclick="toggleVisibility(${d.id})">${toggleLabel}</button>
+              <button class="action-btn-sm btn-sm-delete" onclick="deleteData(${d.id})">削除</button>
+            </div>`;
+          listDiv.appendChild(item);
+        });
+      }
+
+      if (Object.keys(grouped).length === 0) {
+        listDiv.innerHTML = "<p style='color:var(--muted);text-align:center;padding:20px 0'>見つかりません</p>";
+      }
+    }
+
+    function toggleVisibility(id) {
+      let item = studyData.find(d => d.id === id);
+      if (item) { item.isHidden = !item.isHidden; saveData(); renderManageList(); }
+    }
+
+    function deleteData(id) {
+      if (confirm("本当に削除しますか？")) {
+        studyData = studyData.filter(d => d.id !== id);
+        saveData(); renderManageList();
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // GENRE MANAGE MODAL
+    // ══════════════════════════════════════════════════════
+    function openGenreManageModal() {
+      isGenreManageOpen = true;
+      renderGenreList();
+      document.getElementById("genre-manage-overlay").classList.add("show");
+    }
+
+    function closeGenreManageModal() {
+      document.getElementById("genre-manage-overlay").classList.remove("show");
+      isGenreManageOpen = false;
+      let activeGenres = appGenres.filter(g => !g.isHidden).map(g => g.name);
+      if (currentGenre !== "All" && !activeGenres.includes(currentGenre)) currentGenre = "All";
+      initUI(); createBubbles();
+    }
+
+    function renderGenreList() {
+      let listDiv = document.getElementById("genre-list");
+      listDiv.innerHTML = "";
+      if (appGenres.length === 0) { listDiv.innerHTML = "<p style='color:var(--muted);text-align:center;padding:20px 0'>ジャンルがありません</p>"; return; }
+      appGenres.forEach(g => {
+        let count = studyData.filter(d => d.genre === g.name).length;
+        let item = document.createElement("div");
+        item.className = "genre-item" + (g.isHidden ? " hidden-item" : "");
+        let toggleClass = g.isHidden ? "btn-sm-show" : "btn-sm-hide";
+        let toggleLabel = g.isHidden ? "表示" : "隠す";
+        item.innerHTML = `
+          <span class="genre-name">${g.name}</span>
+          <span class="genre-count">${count}問</span>
+          <div class="manage-actions">
+            <button class="action-btn-sm ${toggleClass}" onclick="toggleGenreVisibility(${g.id})">${toggleLabel}</button>
+            <button class="action-btn-sm btn-sm-delete" onclick="deleteGenre(${g.id},'${g.name}')">削除</button>
+          </div>`;
+        listDiv.appendChild(item);
+      });
+    }
+
+    function addNewGenre() {
+      let input = document.getElementById("new-genre-input");
+      let name = input.value.trim();
+      if (!name) return alert("ジャンル名を入力してください。");
+      if (appGenres.find(g => g.name === name)) return alert("そのジャンルは既に存在します。");
+      let newId = appGenres.length > 0 ? Math.max(...appGenres.map(g => g.id)) + 1 : 1;
+      appGenres.push({ id: newId, name, isHidden: false });
+      input.value = "";
+      saveData(); renderGenreList();
+    }
+
+    function toggleGenreVisibility(id) {
+      let g = appGenres.find(g => g.id === id);
+      if (g) { g.isHidden = !g.isHidden; saveData(); renderGenreList(); }
+    }
+
+    function deleteGenre(id, name) {
+      if (confirm(`ジャンル「${name}」を削除します。\n※このジャンルのすべての問題も削除されます。\n本当によろしいですか？`)) {
+        appGenres = appGenres.filter(g => g.id !== id);
+        studyData = studyData.filter(d => d.genre !== name);
+        saveData(); renderGenreList();
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // BUBBLES
+    // ══════════════════════════════════════════════════════
+    function createBubbles() {
+      bubbles = [];
+      let activeGenres = appGenres.filter(g => !g.isHidden).map(g => g.name);
+      let filtered = studyData.filter(d =>
+        !d.isHidden && activeGenres.includes(d.genre) && (currentGenre === "All" || d.genre === currentGenre)
+      );
+      filtered.forEach(d => bubbles.push(new Bubble(d)));
+    }
+
+    function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+
+    // ══════════════════════════════════════════════════════
+    // p5.js SKETCH
+    // ══════════════════════════════════════════════════════
+
+    // Genre color palette (hue values for HSB)
+    const GENRE_HUES = {};
+    const HUES = [200, 20, 140, 270, 50, 170, 320, 90];
+    let hueIndex = 0;
+    function getGenreHue(genre) {
+      if (!(genre in GENRE_HUES)) {
+        GENRE_HUES[genre] = HUES[hueIndex % HUES.length];
+        hueIndex++;
+      }
+      return GENRE_HUES[genre];
+    }
+
+    class Bubble {
+      constructor(data) {
+        this.data = data;
+        this.wobbleOffset = Math.random() * Math.PI * 2;
+        this.wobbleSpeed = 0.015 + Math.random() * 0.01;
+        this.calculateState();
+        this.x = Math.random() * (window.innerWidth - this.r * 2) + this.r;
+        this.y = Math.random() * (window.innerHeight - this.r * 2) + this.r;
+        // Gentle drift
+        let angle = Math.random() * Math.PI * 2;
+        let speed = 0.4 + Math.random() * 0.6;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.hovered = false;
+        this.scale = 1;
+        this.targetScale = 1;
+      }
+
+      calculateState() {
+        let revDate = new Date(this.data.lastRev);
+        let daysPassed = (today - revDate) / 86400000;
+        let urgency = daysPassed - (this.data.mastery * 3);
+
+        this.urgency = urgency;
+        this.r = 70 + urgency * 10;
+        this.r = Math.max(50, Math.min(200, this.r));
+
+        let hue = getGenreHue(this.data.genre);
+
+        // Blue (calm) → Orange/Red (urgent)
+        if (urgency < 0) {
+          // Well studied – soft teal/blue tones
+          this.col = { h: hue, s: 55, b: 92, a: 200 };
+          this.glowA = 80;
+        } else {
+          // Urgency – shifts toward warm orange/red
+          let t = Math.min(1, urgency / 20);
+          this.col = { h: hue * (1 - t) + 15 * t, s: 60 + t * 35, b: 98, a: 210 };
+          this.glowA = 120 + t * 80;
+        }
+
+        // Text sizing
+        this.boxW = this.r * 1.5;
+        let charCount = this.data.q.length;
+        let optSize = Math.sqrt((this.boxW * this.boxW) / Math.max(charCount, 1)) * 0.75;
+        this.fSize = Math.max(9, Math.min(this.r * 0.38, optSize));
+      }
+
+      update(mx, my) {
+        if (isAnyModalOpen()) return;
+
+        // Wobble
+        this.wobbleOffset += this.wobbleSpeed;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Soft boundary bounce with damping
+        let navH = 90, statH = 60;
+        if (this.x < this.r) { this.x = this.r; this.vx = Math.abs(this.vx); }
+        if (this.x > width - this.r) { this.x = width - this.r; this.vx = -Math.abs(this.vx); }
+        if (this.y < this.r + navH) { this.y = this.r + navH; this.vy = Math.abs(this.vy); }
+        if (this.y > height - this.r - statH) { this.y = height - this.r - statH; this.vy = -Math.abs(this.vy); }
+
+        // Hover detection
+        let d = dist(mx, my, this.x, this.y);
+        this.hovered = d < this.r;
+        this.targetScale = this.hovered ? 1.08 : 1;
+        this.scale += (this.targetScale - this.scale) * 0.12;
+      }
+
+      display() {
+        push();
+        translate(this.x, this.y);
+        scale(this.scale);
+
+        // Glow effect for urgent bubbles
+        if (this.urgency > 5) {
+          let glowSize = this.r * 2 + 30;
+          let g = drawingContext.createRadialGradient(0, 0, this.r * 0.5, 0, 0, this.r + 20);
+          g.addColorStop(0, `hsla(${this.col.h}, ${this.col.s}%, ${this.col.b}%, 0.15)`);
+          g.addColorStop(1, `hsla(${this.col.h}, ${this.col.s}%, ${this.col.b}%, 0)`);
+          drawingContext.fillStyle = g;
+          drawingContext.beginPath();
+          drawingContext.arc(0, 0, this.r + 20, 0, Math.PI * 2);
+          drawingContext.fill();
+        }
+
+        // Wobble shape
+        let wob = Math.sin(this.wobbleOffset) * 2;
+
+        // Main bubble body
+        colorMode(HSB, 360, 100, 100, 255);
+        noStroke();
+        fill(this.col.h, this.col.s, this.col.b, this.col.a);
+        ellipse(0, wob * 0.3, this.r * 2 + wob, this.r * 2 - wob * 0.5);
+
+        // Glass highlight (top-left shimmer)
+        let highlightG = drawingContext.createRadialGradient(-this.r * 0.3, -this.r * 0.35, 0, -this.r * 0.3, -this.r * 0.35, this.r * 0.55);
+        highlightG.addColorStop(0, 'rgba(255,255,255,0.45)');
+        highlightG.addColorStop(1, 'rgba(255,255,255,0)');
+        drawingContext.fillStyle = highlightG;
+        drawingContext.beginPath();
+        drawingContext.arc(0, 0, this.r, 0, Math.PI * 2);
+        drawingContext.fill();
+
+        // Rim stroke
+        noFill();
+        stroke(this.col.h, this.col.s * 0.6, this.col.b * 0.7, 80);
+        strokeWeight(1.2);
+        ellipse(0, wob * 0.3, this.r * 2 + wob, this.r * 2 - wob * 0.5);
+
+        // Genre label (small, at top)
+        colorMode(RGB, 255);
+        noStroke();
+        fill(40, 40, 50, 140);
+        textAlign(CENTER, CENTER);
+        textStyle(NORMAL);
+        textSize(Math.max(8, this.r * 0.13));
+        text(this.data.genre, 0, -this.r * 0.68);
+
+        // Main question text
+        fill(20, 20, 30);
+        textStyle(BOLD);
+        textAlign(CENTER, CENTER);
+        textWrap(CHAR);
+        textSize(this.fSize);
+        textLeading(this.fSize * 1.25);
+        text(this.data.q, -this.boxW / 2, -this.boxW * 0.35, this.boxW, this.boxW);
+
+        // Mastery dots at bottom
+        let maxDots = 5;
+        let filledDots = Math.min(maxDots, Math.max(0, Math.floor(this.data.mastery / 2)));
+        let dotSpacing = 12;
+        let totalW = (maxDots - 1) * dotSpacing;
+        for (let i = 0; i < maxDots; i++) {
+          let dx = -totalW / 2 + i * dotSpacing;
+          let dy = this.r * 0.72;
+          if (i < filledDots) {
+            fill(20, 20, 30, 180);
+          } else {
+            fill(20, 20, 30, 50);
+          }
+          ellipse(dx, dy, 5, 5);
+        }
+
+        pop();
+      }
+
+      isClicked(px, py) {
+        return dist(px, py, this.x, this.y) < this.r;
+      }
+    }
+
+    function setup() {
+      let cnv = createCanvas(windowWidth, windowHeight);
+      cnv.style('z-index', '1');
+      initUI();
+      createBubbles();
+      setTimeout(showHint, 1200);
+    }
+
+    function draw() {
+      clear();
+      background(245, 242, 235);
+      for (let b of bubbles) {
+        b.update(mouseX, mouseY);
+        b.display();
+      }
+
+      // Cursor change on hover
+      let hovering = !isAnyModalOpen() && bubbles.some(b => b.hovered);
+      document.body.style.cursor = hovering ? 'pointer' : 'default';
+    }
+
+    function mousePressed() {
+      if (isAnyModalOpen() || mouseY < 90) return;
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        if (bubbles[i].isClicked(mouseX, mouseY)) {
+          openStudyModal(bubbles[i]);
+          break;
+        }
+      }
+    }
+
+    // Touch support
+    function touchStarted() {
+      if (isAnyModalOpen() || touches[0]?.y < 90) return false;
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        if (bubbles[i].isClicked(touches[0].x, touches[0].y)) {
+          openStudyModal(bubbles[i]);
+          return false;
+        }
+      }
+      return false;
+    }
+
+    function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+  </script>
+</body>
+</html>
