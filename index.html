@@ -766,22 +766,9 @@
     // ══════════════════════════════════════════════════════
     // DATA
     // ══════════════════════════════════════════════════════
-    const defaultGenres = [
-      { id: 1, name: "微生物学", isHidden: false },
-      { id: 2, name: "理系", isHidden: false },
-      { id: 3, name: "ドイツ語", isHidden: false },
-      { id: 4, name: "投資", isHidden: false },
-      { id: 5, name: "名言", isHidden: false }
-    ];
+    const defaultGenres = [];
 
-    const defaultData = [
-      { id: 1, genre: "微生物学", q: "キチンを分解する主な酵素は？", a: "キチナーゼ\n（複合微生物系での分解プロセスが鍵）", mastery: 2, lastRev: "2026-03-20", isHidden: false },
-      { id: 2, genre: "理系", q: "顕微鏡などの「bunkainou」の正しい漢字は？", a: "分解能", mastery: 1, lastRev: "2026-03-10", isHidden: false },
-      { id: 3, genre: "ドイツ語", q: "分離動詞 'aufstehen' の意味と過去分詞は？", a: "意味: 起きる\n過去分詞: aufgestanden", mastery: 4, lastRev: "2026-03-22", isHidden: false },
-      { id: 4, genre: "名言", q: "Stay hungry, stay foolish. - スティーブ・ジョブズ", a: "ハングリーであれ、愚かであれ。\n- スティーブ・ジョブズ", mastery: 3, lastRev: "2026-03-15", isHidden: false },
-      { id: 5, genre: "投資", q: "デイトレードの基本原則は？", a: "利益より学習を優先。\nまずは少額（例: 3万円）から経験を積むこと。", mastery: 5, lastRev: "2026-03-23", isHidden: false },
-      { id: 6, genre: "理系", q: "シュレディンガー方程式の目的は？", a: "量子力学において、粒子の状態（波動関数）の時間変化を記述すること。", mastery: 2, lastRev: "2026-03-18", isHidden: false }
-    ];
+    const defaultData = [];
 
     let appGenres = JSON.parse(localStorage.getItem('bubbleStudyGenres_v2')) || defaultGenres;
     let studyData = JSON.parse(localStorage.getItem('bubbleStudyApp_v2'))    || defaultData;
