@@ -1270,17 +1270,15 @@
       createBubbles();
       setTimeout(showHint, 1200);
       // クラウドからデータを読み込んで画面を更新
-      if (JSONBIN_API_KEY && JSONBIN_BIN_ID) {
-        loadFromCloud().then(cloud => {
-          if (!cloud) return;
-          studyData = cloud.studyData || studyData;
-          appGenres = cloud.appGenres || appGenres;
-          localStorage.setItem('bubbleStudyApp_v2',    JSON.stringify(studyData));
-          localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
-          initUI();
-          createBubbles();
-        });
-      }
+      loadFromCloud().then(cloud => {
+        if (!cloud) return;
+        studyData = cloud.studyData || studyData;
+        appGenres = cloud.appGenres || appGenres;
+        localStorage.setItem('bubbleStudyApp_v2',    JSON.stringify(studyData));
+        localStorage.setItem('bubbleStudyGenres_v2', JSON.stringify(appGenres));
+        initUI();
+        createBubbles();
+      });
     }
 
     function draw() {
